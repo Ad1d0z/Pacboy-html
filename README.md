@@ -1,0 +1,40 @@
+# Pacboy (HTML)
+
+A self-contained HTML/JavaScript port of [Pacboy](https://github.com/Ad1d0z/Pacboy),
+the Pac-Man-style maze game originally built with Python + Pygame.
+
+Everything lives in a single file — `pacboy.html`. No dependencies, no assets,
+no build step: sound is synthesized with WebAudio and high scores persist in
+the browser's `localStorage`. Just open it in a browser and play.
+
+## Play
+
+Open `pacboy.html` in any modern browser, or embed it in an HTML presentation:
+
+```html
+<iframe src="pacboy.html" width="600" height="690" style="border:0"></iframe>
+```
+
+Click the game once so it has keyboard focus (this also unlocks the sound).
+While focused, the game swallows arrow-key presses so it won't advance your
+slides mid-game.
+
+## Controls
+
+- **Enter name:** type on the start screen, then **Enter**
+- **Choose difficulty:** Up/Down (or W/S) to pick **Easy / Medium / Hard**, **Enter** to start
+- **Move:** Arrow keys or **W A S D**
+- **Play again** (after game over): **R**
+
+## Gameplay
+
+- Clear every coin to advance — an endless, escalating run of fresh mazes with
+  faster enemy spawns each level. Score and lives carry over.
+- Enemies come in four personalities (max **5** active): a **chaser** (red),
+  an **ambusher** (pink) that cuts ahead of you, a **shy** one (orange) that
+  retreats when you get close, and a **roamer** (cyan).
+- **Teleporters** on the left and right edges warp you across the maze.
+- **Cherries** near the corners turn enemies blue and edible for a few
+  seconds; eating ghosts in a row scores **200 → 400 → 800 → 1600**.
+- +10 per coin, +50 per cherry. Your best runs are kept in a local
+  high-score table.
