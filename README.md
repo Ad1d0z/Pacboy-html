@@ -29,12 +29,14 @@ slides mid-game.
 ## Gameplay
 
 - Clear every coin to advance — an endless, escalating run of fresh mazes with
-  faster enemy spawns each level. Score and lives carry over.
+  faster enemy spawns each level. Score and lives carry over. There are ten
+  maze layouts, each with its own wall colour theme, picked at random per level.
 - Enemies come in four personalities (max **5** active): a **chaser** (red),
   an **ambusher** (pink) that cuts ahead of you, a **shy** one (orange) that
   retreats when you get close, and a **roamer** (cyan).
 - **Teleporters** on the left and right edges warp you across the maze.
-- **Cherries** near the corners turn enemies blue and edible for a few
-  seconds; eating ghosts in a row scores **200 → 400 → 800 → 1600**.
+- **Cherries** near the corners (plus one by the ghost house on Easy) turn
+  enemies blue and edible for a few seconds; eating ghosts in a row scores
+  **200 → 400 → 800 → 1600**.
 - +10 per coin, +50 per cherry. Your best runs are kept in a local
   high-score table.
