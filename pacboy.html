@@ -23,15 +23,20 @@
   body { display: flex; align-items: center; justify-content: center; }
   canvas {
     display: block;
-    max-width: 100vw;
-    max-height: 100vh;
-    width: auto;
-    height: 100vh;
-    aspect-ratio: 588 / 670;
+    /* Fit the viewport while always keeping the 588:670 ratio — width and
+       height are derived from the same constraint so neither can stretch. */
+    --vw: 100vw;
+    --vh: 100vh;
+    width:  min(var(--vw), calc(var(--vh) * 588 / 670));
+    height: min(var(--vh), calc(var(--vw) * 670 / 588));
     touch-action: none;
     user-select: none;
     -webkit-user-select: none;
     -webkit-tap-highlight-color: transparent;
+  }
+  @supports (height: 100dvh) {
+    /* Dynamic viewport units track mobile URL-bar show/hide. */
+    canvas { --vw: 100dvw; --vh: 100dvh; }
   }
   /* Invisible input used on touch devices to summon the on-screen keyboard
      for name entry; the game canvas renders the typed text itself. */
