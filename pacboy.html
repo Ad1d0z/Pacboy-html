@@ -1439,31 +1439,38 @@ class Game {
     ctx.fillRect(0, y0, this.widthPx, HUD_HEIGHT);
     this.drawHudMascot();
 
-    ctx.textAlign = "left";
+    // Top line: Lives pinned left, Score centred, Time pinned right.
     ctx.textBaseline = "top";
     ctx.font = FONT;
+    ctx.textAlign = "left";
     ctx.fillStyle = COLOR_HUD_TEXT;
     ctx.fillText("Lives: " + this.lives, 26, y0 + 20);
+    ctx.textAlign = "center";
     ctx.fillStyle = COLOR_PLAYER;
-    ctx.fillText("Score: " + this.score, this.widthPx / 2 - 90, y0 + 20);
+    ctx.fillText("Score: " + this.score, this.widthPx / 2, y0 + 20);
+    ctx.textAlign = "right";
     ctx.fillStyle = COLOR_HUD_TEXT;
-    ctx.fillText("Time: " + this.formatTime(this.elapsedMs), this.widthPx - 150, y0 + 20);
+    ctx.fillText("Time: " + this.formatTime(this.elapsedMs), this.widthPx - 26, y0 + 20);
 
+    // Second line: five evenly spaced columns, each item centred in its own
+    // slot (POWER owns the last slot so nothing shifts when it appears).
     ctx.font = SMALL_FONT;
-    ctx.fillStyle = COLOR_TELEPORT;
-    ctx.fillText("Lv" + this.level + " " + this.difficulty, 26, y0 + 50);
-    ctx.fillStyle = COLOR_HUD_TEXT;
-    ctx.fillText("Coins:" + (this.maze.coinsTotal - this.maze.coins.size) + "/" + this.maze.coinsTotal,
-                 132, y0 + 50);
-    ctx.fillStyle = COLOR_CHERRY;
-    ctx.fillText("Cherry:" + this.maze.cherries.size, 252, y0 + 50);
-    ctx.fillStyle = COLOR_HUD_TEXT;
-    ctx.fillText("Foes:" + this.enemies.length + "/" + MAX_ENEMIES, 360, y0 + 50);
-    if (this.powerTimer > 0) {
-      ctx.fillStyle = COLOR_FRIGHTENED_FLASH;
-      ctx.fillText("POWER " + (this.powerTimer / 1000).toFixed(1) + "s",
-                   this.widthPx - 120, y0 + 50);
-    }
+    ctx.textAlign = "center";
+    const items = [
+      ["Lv" + this.level + " " + this.difficulty, COLOR_TELEPORT],
+      ["Coins:" + (this.maze.coinsTotal - this.maze.coins.size) + "/" + this.maze.coinsTotal,
+       COLOR_HUD_TEXT],
+      ["Cherry:" + this.maze.cherries.size, COLOR_CHERRY],
+      ["Foes:" + this.enemies.length + "/" + MAX_ENEMIES, COLOR_HUD_TEXT],
+      [this.powerTimer > 0 ? "POWER " + (this.powerTimer / 1000).toFixed(1) + "s" : "",
+       COLOR_FRIGHTENED_FLASH],
+    ];
+    items.forEach(([text, color], i) => {
+      if (!text) return;
+      ctx.fillStyle = color;
+      ctx.fillText(text, this.widthPx * (i + 0.5) / items.length, y0 + 50);
+    });
+    ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
   }
 
