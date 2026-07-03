@@ -21,10 +21,21 @@ slides mid-game.
 
 ## Controls
 
+Keyboard:
+
 - **Enter name:** type on the start screen, then **Enter**
 - **Choose difficulty:** Up/Down (or W/S) to pick **Easy / Medium / Hard**, **Enter** to start
 - **Move:** Arrow keys or **W A S D**
 - **Play again** (after game over): **R**
+
+Touch (phones/tablets):
+
+- **Tap** to skip the intro; on the name screen a tap summons the on-screen
+  keyboard (Go/Enter continues)
+- **Tap a difficulty** to select it, tap it again to start
+- **Swipe** anywhere to steer — one continuous drag can steer through
+  several turns
+- **Tap** the game-over screen to play again
 
 ## Gameplay
 
