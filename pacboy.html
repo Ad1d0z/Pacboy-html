@@ -41,8 +41,12 @@
   /* Invisible input used on touch devices to summon the on-screen keyboard
      for name entry; the game canvas renders the typed text itself. */
   #name-form { position: fixed; top: 0; left: 0; margin: 0; }
-  #name-input { position: fixed; top: 0; left: 0; width: 2px; height: 2px;
-                opacity: 0; border: 0; padding: 0; background: transparent; }
+  /* Nearly invisible but real-sized: zero-size/opacity-0 inputs are refused
+     focus by some mobile browsers, and font-size >= 16px stops iOS from
+     zooming the page when the keyboard opens. */
+  #name-input { position: fixed; top: 0; left: 0; width: 44px; height: 28px;
+                opacity: 0.02; border: 0; padding: 0; background: transparent;
+                font-size: 16px; color: transparent; caret-color: transparent; }
 </style>
 </head>
 <body>
@@ -1580,10 +1584,11 @@ window.addEventListener("keydown", (e) => {
   game.handleKey(e);
 });
 
-// A click/tap also unlocks audio and (in an iframe) grabs keyboard focus.
+// A click/tap also unlocks audio and (in an iframe) grabs keyboard focus —
+// but never steal focus from the name field while it's summoning a keyboard.
 window.addEventListener("pointerdown", () => {
   ensureAudio();
-  window.focus();
+  if (document.activeElement !== nameField) window.focus();
 });
 
 // --- touch controls: swipe to steer, tap to drive the menus ---
@@ -1592,6 +1597,10 @@ const SWIPE_PX = 14;                 // drag distance that counts as a swipe
 let swipe = null;
 
 canvas.addEventListener("pointerdown", (e) => {
+  // Cancelling pointerdown suppresses the synthesized mouse events after a
+  // touch tap — without this, the compat mousedown shifts focus off the name
+  // field and closes the keyboard the instant it opens.
+  e.preventDefault();
   swipe = { x: e.clientX, y: e.clientY, moved: false };
   try { canvas.setPointerCapture(e.pointerId); } catch {}
 });
@@ -1617,6 +1626,16 @@ canvas.addEventListener("pointerup", (e) => {
 });
 
 canvas.addEventListener("pointercancel", () => { swipe = null; });
+
+// Focus fallback on `click`: it fires after the full tap sequence and is the
+// user-activation point every mobile browser honours for opening the
+// on-screen keyboard (some ignore focus() from pointerup).
+canvas.addEventListener("click", () => {
+  if (game.state === STATE.ENTER_NAME && document.activeElement !== nameField) {
+    nameField.value = game.nameInput;
+    nameField.focus({ preventScroll: true });
+  }
+});
 
 // --- hidden name field: mirrors the on-screen keyboard into the game ---
 
