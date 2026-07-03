@@ -24,17 +24,21 @@ slides mid-game.
 Keyboard:
 
 - **Enter name:** type on the start screen, then **Enter**
-- **Choose difficulty:** Up/Down (or W/S) to pick **Easy / Medium / Hard**, **Enter** to start
+- **Choose difficulty:** Up/Down (or W/S) to pick **Easy / Medium / Hard**, **Enter** to start;
+  **Backspace** goes back to edit your name
 - **Move:** Arrow keys or **W A S D**
+- **Pause:** **P** or **Esc** (or the button in the top-right corner)
 - **Play again** (after game over): **R**
 
 Touch (phones/tablets):
 
 - **Tap** to skip the intro; on the name screen a tap summons the on-screen
   keyboard (Go/Enter continues)
-- **Tap a difficulty** to select it, tap it again to start
+- **Tap a difficulty** to select it, tap it again to start; **"< BACK"**
+  returns to name entry
 - **Swipe** anywhere to steer — one continuous drag can steer through
   several turns
+- **Tap the pause button** (top-right corner) to pause; tap anywhere to resume
 - **Tap** the game-over screen to play again
 
 ## Gameplay

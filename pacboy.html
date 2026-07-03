@@ -12,10 +12,12 @@
     <iframe src="pacboy.html" width="600" height="690" style="border:0"></iframe>
   (Click the game once so it has keyboard focus, then play.)
 
-  Keyboard: type name + Enter, pick difficulty with Up/Down + Enter,
-  move with arrow keys or WASD, R to play again after game over.
-  Touch: tap to advance menus (tap a difficulty, tap it again to start),
-  tap the name screen to summon the keyboard, swipe anywhere to steer.
+  Keyboard: type name + Enter, pick difficulty with Up/Down + Enter
+  (Backspace goes back to edit the name), move with arrow keys or WASD,
+  P or Esc pauses, R to play again after game over.
+  Touch: tap to advance menus (tap a difficulty, tap it again to start,
+  "< BACK" returns to name entry), tap the name screen to summon the
+  keyboard, swipe anywhere to steer, tap the corner button to pause.
 -->
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden;
@@ -836,8 +838,8 @@ function playSfx(name) { if (audioCtx && SFX[name]) SFX[name](); }
 
 const STATE = {
   INTRO: "intro", ENTER_NAME: "enter_name", CHOOSE_DIFFICULTY: "choose_difficulty",
-  PLAYING: "playing", LIFE_LOST: "life_lost", LEVEL_CLEAR: "level_clear",
-  GAME_OVER: "game_over",
+  PLAYING: "playing", PAUSED: "paused", LIFE_LOST: "life_lost",
+  LEVEL_CLEAR: "level_clear", GAME_OVER: "game_over",
 };
 
 const canvas = document.getElementById("game");
@@ -969,8 +971,12 @@ class Game {
 
     if ((k === "r" || k === "R") && this.state === STATE.GAME_OVER) {
       this.state = STATE.CHOOSE_DIFFICULTY;    // play again, name kept
+    } else if (this.state === STATE.PAUSED) {
+      if (k === "p" || k === "P" || k === "Escape" || k === "Enter" || k === " ")
+        this.state = STATE.PLAYING;
     } else if (this.state === STATE.PLAYING) {
-      if (k === "ArrowUp" || k === "w" || k === "W") this.player.steer(UP);
+      if (k === "p" || k === "P" || k === "Escape") this.state = STATE.PAUSED;
+      else if (k === "ArrowUp" || k === "w" || k === "W") this.player.steer(UP);
       else if (k === "ArrowDown" || k === "s" || k === "S") this.player.steer(DOWN);
       else if (k === "ArrowLeft" || k === "a" || k === "A") this.player.steer(LEFT);
       else if (k === "ArrowRight" || k === "d" || k === "D") this.player.steer(RIGHT);
@@ -998,6 +1004,7 @@ class Game {
   handleDifficultyInput(e) {
     const k = e.key, n = DIFFICULTY_ORDER.length;
     if (k === "Enter") this.startGame();
+    else if (k === "Backspace" || k === "Escape") this.state = STATE.ENTER_NAME;
     else if (k === "ArrowUp" || k === "w" || k === "W" || k === "ArrowLeft" || k === "a" || k === "A")
       this.diffIndex = (this.diffIndex - 1 + n) % n;
     else if (k === "ArrowDown" || k === "s" || k === "S" || k === "ArrowRight" || k === "d" || k === "D")
@@ -1014,6 +1021,10 @@ class Game {
       nameField.value = this.nameInput;
       nameField.focus({ preventScroll: true });
     } else if (this.state === STATE.CHOOSE_DIFFICULTY) {
+      if (cx < 140 && cy < 64) {           // "< BACK" — return to name entry
+        this.state = STATE.ENTER_NAME;
+        return;
+      }
       for (let i = 0; i < DIFFICULTY_ORDER.length; i++) {
         const y = 180 + 76 * i;   // matches drawDifficulty row positions
         if (cy >= y - 26 && cy <= y + 44) {
@@ -1022,6 +1033,12 @@ class Game {
           return;
         }
       }
+    } else if (this.state === STATE.PLAYING) {
+      // Only the pause button is a tap target during play (swipes steer).
+      if (Math.hypot(cx - (this.widthPx - 26), cy - 26) <= 24)
+        this.state = STATE.PAUSED;
+    } else if (this.state === STATE.PAUSED) {
+      this.state = STATE.PLAYING;
     } else if (this.state === STATE.GAME_OVER) {
       this.state = STATE.CHOOSE_DIFFICULTY;
     }
@@ -1038,6 +1055,8 @@ class Game {
       if (this.introT >= INTRO_DURATION_MS) this.state = STATE.ENTER_NAME;
       return;
     }
+
+    if (this.state === STATE.PAUSED) return;   // world and clock frozen
 
     if (this.state === STATE.PLAYING || this.state === STATE.LIFE_LOST
         || this.state === STATE.LEVEL_CLEAR) {
@@ -1141,10 +1160,38 @@ class Game {
     this.drawPlayer();
     for (const enemy of this.enemies) this.drawEnemy(enemy);
     this.drawHud();
+    if (this.state === STATE.PLAYING || this.state === STATE.PAUSED)
+      this.drawPauseButton();
     if (this.state === STATE.ENTER_NAME) this.drawNameEntry();
     else if (this.state === STATE.CHOOSE_DIFFICULTY) this.drawDifficulty();
+    else if (this.state === STATE.PAUSED) this.drawPaused();
     else if (this.state === STATE.LEVEL_CLEAR) this.drawLevelClear();
     else if (this.state === STATE.GAME_OVER) this.drawEndScreen("GAME OVER", "rgb(255,90,90)");
+  }
+
+  drawPauseButton() {
+    const cx = this.widthPx - 26, cy = 26;
+    ctx.fillStyle = "rgba(10,10,30,0.75)";
+    ctx.beginPath(); ctx.arc(cx, cy, 16, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.6)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx, cy, 16, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = "rgb(255,255,255)";
+    if (this.state === STATE.PAUSED) {       // play triangle while paused
+      ctx.beginPath();
+      ctx.moveTo(cx - 4, cy - 6); ctx.lineTo(cx + 7, cy); ctx.lineTo(cx - 4, cy + 6);
+      ctx.closePath(); ctx.fill();
+    } else {                                 // pause bars while playing
+      ctx.fillRect(cx - 6, cy - 6, 4, 12);
+      ctx.fillRect(cx + 2, cy - 6, 4, 12);
+    }
+  }
+
+  drawPaused() {
+    this.dimBackground();
+    this.textCenter("PAUSED", this.heightPx / 2 - 16, BIG_FONT, COLOR_PLAYER);
+    this.textCenter(IS_TOUCH ? "Tap to resume" : "Press P to resume",
+                    this.heightPx / 2 + 36, FONT, COLOR_HUD_TEXT);
+    this.drawPauseButton();                  // keep the button above the dim
   }
 
   /* --- startup intro: zoom into an arcade cabinet --- */
@@ -1529,6 +1576,10 @@ class Game {
 
   drawDifficulty() {
     this.dimBackground();
+    ctx.font = FONT;
+    ctx.fillStyle = COLOR_HUD_TEXT;
+    ctx.textAlign = "left";
+    ctx.fillText("< BACK", 20, 40);          // tap/Backspace: edit the name
     this.textCenter("DIFFICULTY", 90, BIG_FONT, COLOR_PLAYER);
     let y = 180;
     DIFFICULTY_ORDER.forEach((name, i) => {
@@ -1543,8 +1594,8 @@ class Game {
       y += 76;
     });
     this.textCenter("Player: " + this.playerName + (IS_TOUCH
-                    ? "    Tap a difficulty, tap it again to start"
-                    : "    Up/Down to choose, ENTER to start"),
+                    ? "    Tap a difficulty twice to start, < BACK to edit name"
+                    : "    Up/Down + ENTER to start, Backspace to edit name"),
                     this.heightPx - 24, SMALL_FONT, COLOR_HUD_TEXT);
   }
 
