@@ -59,7 +59,7 @@
 
 const TILE = 28;
 const HUD_HEIGHT = 82;
-const STEP_MS = 1000 / 60;            // fixed 60 Hz logic step
+const STEP_MS = 1000 / 60;            // max logic chunk; real dt is sub-stepped
 
 const HUD_LANE_MARGIN = 11;
 const HUD_MASCOT_SPEED = 0.10;        // px per ms around the HUD loop
@@ -71,9 +71,10 @@ const HUD_DOT_RADIUS = 2;
 const INTRO_DURATION_MS = 2600;
 const INTRO_EASE = 2.4;
 
-const PLAYER_SPEED = 4;               // px per logic frame; must divide TILE
+const PLAYER_SPEED = 4;               // px per 1/60s of travel
 const ENEMY_SPEED = 2;
 const FRIGHT_SPEED = 1;
+const LATE_TURN_PX = 6;               // cornering forgiveness past a junction
 
 const MAX_ENEMIES = 5;
 const LIFE_LOST_PAUSE_MS = 1200;
@@ -579,20 +580,32 @@ class Entity {
   update(dt) {
     if (this.teleportCooldown > 0) this.teleportCooldown -= dt;
 
-    if (this.aligned) {
-      this.maybeTeleport();
-      this.onAligned();
-      if (!this.canMove(this.direction)) this.direction = NONE;
+    // Consume travel distance boundary-by-boundary so movement stays exact
+    // for any dt (the main loop passes real frame deltas, not fixed steps).
+    let remaining = this.speed * dt / STEP_MS;
+    while (remaining > 0) {
+      if (this.aligned) {
+        this.maybeTeleport();
+        this.onAligned();
+        if (!this.canMove(this.direction)) { this.direction = NONE; break; }
+      }
+      const [dc, dr] = this.direction;
+      if (dc === 0 && dr === 0) break;
+      const distToBound = dc !== 0
+        ? Math.abs((this.col + dc) * TILE - this.x)
+        : Math.abs((this.row + dr) * TILE - this.y);
+      const step = Math.min(remaining, distToBound);
+      if (step <= 0) break;
+      this.x += dc * step;
+      this.y += dr * step;
+      remaining -= step;
+      if (step === distToBound) {
+        // Reached the next cell: snap exactly (float drift would break the
+        // strict equality in `aligned`), then keep going with the leftover.
+        if (dc !== 0) { this.col += dc; this.x = this.col * TILE; }
+        else { this.row += dr; this.y = this.row * TILE; }
+      }
     }
-
-    const [dc, dr] = this.direction;
-    this.x += dc * this.speed;
-    this.y += dr * this.speed;
-
-    if (dc > 0 && this.x >= (this.col + 1) * TILE) { this.col++; this.x = this.col * TILE; }
-    else if (dc < 0 && this.x <= (this.col - 1) * TILE) { this.col--; this.x = this.col * TILE; }
-    if (dr > 0 && this.y >= (this.row + 1) * TILE) { this.row++; this.y = this.row * TILE; }
-    else if (dr < 0 && this.y <= (this.row - 1) * TILE) { this.row--; this.y = this.row * TILE; }
   }
 
   maybeTeleport() {
@@ -619,6 +632,40 @@ class Player extends Entity {
     this.direction = NONE;
     this.nextDirection = NONE;
     this.teleportCooldown = 0;
+  }
+
+  // All steering input lands here. A 180° reversal applies immediately
+  // (mid-cell, the anchor swaps so col/row stays the trailing cell and the
+  // boundary snap still fires); anything else buffers until a junction.
+  steer(dir) {
+    const [dc, dr] = this.direction;
+    if ((dc !== 0 || dr !== 0) && dir[0] === -dc && dir[1] === -dr) {
+      if (!this.aligned) {
+        this.col += dc;
+        this.row += dr;
+      }
+      this.direction = dir;
+      this.nextDirection = NONE;
+      return;
+    }
+    this.nextDirection = dir;
+  }
+
+  // Late-turn forgiveness: honour a perpendicular turn pressed just after
+  // passing a junction by snapping back onto it (classic arcade cornering).
+  update(dt) {
+    const nd = this.nextDirection;
+    if ((nd[0] !== 0 || nd[1] !== 0) && !this.aligned
+        && nd[0] * this.direction[0] + nd[1] * this.direction[1] === 0
+        && this.canMove(nd)) {
+      const past = Math.abs(this.x - this.col * TILE)
+                 + Math.abs(this.y - this.row * TILE);
+      if (past <= LATE_TURN_PX) {
+        this.x = this.col * TILE;
+        this.y = this.row * TILE;
+      }
+    }
+    super.update(dt);
   }
 
   onAligned() {
@@ -790,14 +837,14 @@ const STATE = {
 };
 
 const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+const ctx = canvas.getContext("2d", { alpha: false });
 const nameField = document.getElementById("name-input");
 const IS_TOUCH = window.matchMedia && matchMedia("(pointer: coarse)").matches;
 
-function roundRect(x, y, w, h, r) {
-  ctx.beginPath();
-  if (ctx.roundRect) ctx.roundRect(x, y, w, h, r);
-  else ctx.rect(x, y, w, h);
+function roundRect(g, x, y, w, h, r) {
+  g.beginPath();
+  if (g.roundRect) g.roundRect(x, y, w, h, r);
+  else g.rect(x, y, w, h);
 }
 
 class Game {
@@ -850,6 +897,7 @@ class Game {
 
   resetWorld() {
     this.maze = new Maze(this.params.cherry_count);
+    this.buildMazeLayer();
     this.player = new Player(this.maze);
     this.enemies = [];
     this.spawnTimer = 0;
@@ -918,10 +966,10 @@ class Game {
     if ((k === "r" || k === "R") && this.state === STATE.GAME_OVER) {
       this.state = STATE.CHOOSE_DIFFICULTY;    // play again, name kept
     } else if (this.state === STATE.PLAYING) {
-      if (k === "ArrowUp" || k === "w" || k === "W") this.player.nextDirection = UP;
-      else if (k === "ArrowDown" || k === "s" || k === "S") this.player.nextDirection = DOWN;
-      else if (k === "ArrowLeft" || k === "a" || k === "A") this.player.nextDirection = LEFT;
-      else if (k === "ArrowRight" || k === "d" || k === "D") this.player.nextDirection = RIGHT;
+      if (k === "ArrowUp" || k === "w" || k === "W") this.player.steer(UP);
+      else if (k === "ArrowDown" || k === "s" || k === "S") this.player.steer(DOWN);
+      else if (k === "ArrowLeft" || k === "a" || k === "A") this.player.steer(LEFT);
+      else if (k === "ArrowRight" || k === "d" || k === "D") this.player.steer(RIGHT);
     }
   }
 
@@ -1005,11 +1053,15 @@ class Game {
     if (this.state !== STATE.PLAYING) return;
 
     this.player.update(dt);
-    if (this.maze.eatCoin(this.player.col, this.player.row)) {
+    // Eat at the cell nearest the sprite — col/row can point a cell ahead
+    // right after a mid-cell reversal swaps the movement anchor.
+    const ec = Math.round(this.player.x / TILE);
+    const er = Math.round(this.player.y / TILE);
+    if (this.maze.eatCoin(ec, er)) {
       this.score += COIN_POINTS;
       playSfx("chomp");
     }
-    if (this.maze.eatCherry(this.player.col, this.player.row)) {
+    if (this.maze.eatCherry(ec, er)) {
       this.powerTimer = this.params.power_ms;
       this.killChain = 0;
       this.score += CHERRY_POINTS;
@@ -1193,33 +1245,54 @@ class Game {
     return [cx, sy + sh / 2, sw, sh];
   }
 
-  drawMaze() {
+  // Pre-render the static maze (walls, teleporters, door, spawn shading) to
+  // an offscreen canvas once per level; drawMaze then just blits it. This
+  // keeps the per-frame cost on low-end phones down to coins and cherries.
+  buildMazeLayer() {
+    if (!this.mazeLayer) {
+      this.mazeLayer = document.createElement("canvas");
+      this.mazeLayer.width = this.widthPx;
+      this.mazeLayer.height = this.heightPx;
+    }
+    const g = this.mazeLayer.getContext("2d");
+    g.fillStyle = COLOR_BG;
+    g.fillRect(0, 0, this.widthPx, this.heightPx);
     const t = TILE;
     for (let r = 0; r < this.maze.height; r++) {
       for (let c = 0; c < this.maze.width; c++) {
         const ch = this.maze.char(c, r);
         const x = c * t, y = r * t;
         if (ch === WALL) {
-          roundRect(x + 2, y + 2, t - 4, t - 4, 6);
-          ctx.fillStyle = this.maze.wallColor; ctx.fill();
-          ctx.strokeStyle = this.maze.wallEdgeColor; ctx.lineWidth = 2; ctx.stroke();
+          roundRect(g, x + 2, y + 2, t - 4, t - 4, 6);
+          g.fillStyle = this.maze.wallColor; g.fill();
+          g.strokeStyle = this.maze.wallEdgeColor; g.lineWidth = 2; g.stroke();
         } else if (ch === TELEPORT) {
-          roundRect(x + 3, y + 3, t - 6, t - 6, 8);
-          ctx.fillStyle = COLOR_TELEPORT; ctx.fill();
+          roundRect(g, x + 3, y + 3, t - 6, t - 6, 8);
+          g.fillStyle = COLOR_TELEPORT; g.fill();
         } else if (ch === DOOR) {
-          ctx.fillStyle = COLOR_DOOR;
-          ctx.fillRect(x + 4, y + t / 2 - 2, t - 8, 4);
+          g.fillStyle = COLOR_DOOR;
+          g.fillRect(x + 4, y + t / 2 - 2, t - 8, 4);
         } else if (ch === SPAWN) {
-          ctx.fillStyle = "rgb(20,20,40)";
-          ctx.fillRect(x, y, t, t);
-        }
-        if (this.maze.coins.has(key(c, r))) {
-          ctx.fillStyle = COLOR_COIN;
-          ctx.beginPath(); ctx.arc(x + t / 2, y + t / 2, 3, 0, Math.PI * 2); ctx.fill();
-        } else if (this.maze.cherries.has(key(c, r))) {
-          this.drawCherry(x + t / 2, y + t / 2);
+          g.fillStyle = "rgb(20,20,40)";
+          g.fillRect(x, y, t, t);
         }
       }
+    }
+  }
+
+  drawMaze() {
+    ctx.drawImage(this.mazeLayer, 0, 0);
+    const t = TILE;
+    ctx.fillStyle = COLOR_COIN;
+    for (const k of this.maze.coins) {
+      const [c, r] = k.split(",").map(Number);
+      ctx.beginPath();
+      ctx.arc(c * t + t / 2, r * t + t / 2, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    for (const k of this.maze.cherries) {
+      const [c, r] = k.split(",").map(Number);
+      this.drawCherry(c * t + t / 2, r * t + t / 2);
     }
   }
 
@@ -1508,7 +1581,7 @@ window.addEventListener("pointerdown", () => {
 
 // --- touch controls: swipe to steer, tap to drive the menus ---
 
-const SWIPE_PX = 22;                 // drag distance that counts as a swipe
+const SWIPE_PX = 14;                 // drag distance that counts as a swipe
 let swipe = null;
 
 canvas.addEventListener("pointerdown", (e) => {
@@ -1522,7 +1595,7 @@ canvas.addEventListener("pointermove", (e) => {
   if (Math.abs(dx) < SWIPE_PX && Math.abs(dy) < SWIPE_PX) return;
   const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? RIGHT : LEFT)
                                           : (dy > 0 ? DOWN : UP);
-  if (game.state === STATE.PLAYING) game.player.nextDirection = dir;
+  if (game.state === STATE.PLAYING) game.player.steer(dir);
   // Re-anchor so one continuous drag can steer through several turns.
   swipe.x = e.clientX; swipe.y = e.clientY; swipe.moved = true;
 });
@@ -1558,14 +1631,17 @@ document.getElementById("name-form").addEventListener("submit", (e) => {
 });
 
 let last = performance.now();
-let acc = 0;
 
 function frame(now) {
-  acc += Math.min(now - last, 250);   // clamp huge tab-switch gaps
+  // Step the real frame delta, sub-stepped into chunks of at most 1/60s so a
+  // 120 Hz display gets two fine steps per frame (smooth native-rate motion)
+  // while collision/timer granularity never degrades on lag spikes.
+  let dt = Math.min(now - last, 250);   // clamp huge tab-switch gaps
   last = now;
-  while (acc >= STEP_MS) {
-    game.update(STEP_MS);
-    acc -= STEP_MS;
+  while (dt > 0) {
+    const step = Math.min(dt, STEP_MS);
+    game.update(step);
+    dt -= step;
   }
   game.draw();
   requestAnimationFrame(frame);
